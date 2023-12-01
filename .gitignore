@@ -2,4 +2,5 @@ test
 train
 train_picture_upgrade
 .idea
-
+data
+.DS_Store
