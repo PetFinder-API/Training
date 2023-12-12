@@ -4,3 +4,4 @@ train_picture_upgrade
 .idea
 data
 .DS_Store
+/kaggle.json

@@ -12,3 +12,5 @@ unzip petfinder-pawpularity-score.zip -d "$destination_folder"
 
 # Print a message indicating that the extraction is complete
 echo "Zip file has been extracted to: $destination_folder"
+
+rm petfinder-pawpularity-score.zip

@@ -1,14 +1,14 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from PIL import Image
-from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense,BatchNormalization, Dropout
+from keras.callbacks import TensorBoard, EarlyStopping, LearningRateScheduler
+from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, BatchNormalization, Dropout
+from keras.metrics import RootMeanSquaredError
 from keras.models import Sequential
-from sklearn.model_selection import train_test_split
 from keras.optimizers import Adam
 from keras.preprocessing.image import ImageDataGenerator
-from keras.callbacks import TensorBoard, EarlyStopping, LearningRateScheduler
-import matplotlib.pyplot as plt
-from keras.metrics import RootMeanSquaredError
+from sklearn.model_selection import train_test_split
 
 
 # Transformation des images pour les adapter au modèle
@@ -18,6 +18,7 @@ def preprocess_image(img_path):
     img_array = np.array(img) / 255.0  # Normalisation des valeurs de pixel
     return img_array
 
+
 datagen = ImageDataGenerator(
     rotation_range=20,
     width_shift_range=0.2,
@@ -25,7 +26,7 @@ datagen = ImageDataGenerator(
     shear_range=0.2,
     zoom_range=0.2,
     horizontal_flip=True,
-    vertical_flip= True,
+    vertical_flip=True,
     fill_mode='nearest'
 )
 # Ajouter TensorBoard comme callback
@@ -66,12 +67,12 @@ def build_model():
 
 
 def get_metadata():
-    metadata = pd.read_json("train_data.json")
+    metadata = pd.read_csv("data/train/train.csv")
     return metadata[["Id", "Pawpularity"]].head(1000)
 
 
 def get_images(ids):
-    images_path = "train/"
+    images_path = "data/train/"
     return np.array([preprocess_image(images_path + "/" + id + ".jpg") for id in ids])
 
 
@@ -110,14 +111,15 @@ def plot_training_history(history):
     plt.tight_layout()
     plt.show()
 
+
 def lr_schedule(epoch):
     lr = 1e-4
     if epoch > 20:
         lr *= 0.5
     return lr
 
-lr_scheduler = LearningRateScheduler(lr_schedule)
 
+lr_scheduler = LearningRateScheduler(lr_schedule)
 
 
 def train():
@@ -140,15 +142,14 @@ def train():
     # Compiler le modèle avec le taux d'apprentissage réduit
     model.compile(optimizer=Adam(lr=0.0001), loss='mean_squared_error', metrics=['mae', 'mse', RootMeanSquaredError()])
 
-
-    early_stopping = EarlyStopping(monitor='val_root_mean_squared_error',patience=10,restore_best_weights=True)
+    early_stopping = EarlyStopping(monitor='val_root_mean_squared_error', patience=10, restore_best_weights=True)
 
     # Entraîner le modèle
     num_epochs = 10
 
-
-    #Essayer batch_size 64 après (ne pas oublié tensorboard)
-    history=model.fit(X_train,y_train,epochs=num_epochs,batch_size=32,validation_data=(X_test, y_test),callbacks=[early_stopping])
+    # Essayer batch_size 64 après (ne pas oublié tensorboard)
+    history = model.fit(X_train, y_train, epochs=num_epochs, batch_size=32, validation_data=(X_test, y_test),
+                        callbacks=[early_stopping])
 
     # Plot de l'historique d'entraînement
     plot_training_history(history)
