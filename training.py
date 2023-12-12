@@ -34,6 +34,8 @@ tensorboard = TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=True, 
 
 
 def build_model():
+    # To improve the model performance, you could look into transfer learning
+    # to use existing model and only train the n-last layers
     model = Sequential()
 
     model.add(Conv2D(64, (3, 3), input_shape=(56, 56, 3), activation='relu'))
@@ -122,8 +124,14 @@ def lr_schedule(epoch):
 lr_scheduler = LearningRateScheduler(lr_schedule)
 
 
+def download_images_from_gcs():
+    # download if data folder does not exist
+    pass
+
+
 def train():
     # Appeler Mongo pour mettre la colonne "adoptabilité"
+    download_images_from_gcs()
     metadata = get_metadata()
     popularity_score = metadata["Pawpularity"].values
     print("Popularity scores acquired")
