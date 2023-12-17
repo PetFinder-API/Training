@@ -7,3 +7,4 @@ pandas
 matplotlib
 kaggle
 seaborn
+google-cloud-storage

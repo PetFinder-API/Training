@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+import pandas as  pd
 from PIL import Image
 from keras.callbacks import EarlyStopping, LearningRateScheduler
 from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, BatchNormalization, Dropout
@@ -9,13 +9,15 @@ from sklearn.model_selection import train_test_split
 from Python_file.plot_functions import plot_data_train, plot_training_history
 from keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import RMSprop
+from google.cloud import storage
+import os
 
 
 # Transformation des images pour les adapter au modèle
 def preprocess_image(img_path):
     img = Image.open(img_path).convert("RGB")
     img = img.resize((56, 56))
-    img_array = np.array(img) / 255.0  # Normalisation des valeurs de pixel
+    img_array = np.array(img) / 255.0
     return img_array
 
 
@@ -70,7 +72,27 @@ def get_images(ids):
 
 def download_images_from_gcs():
     # download if data folder does not exist
-    pass
+    bucket_name = "pet-finder"
+    project_id = "pet-finder-407918"
+
+    client = storage.Client(project=project_id)
+
+    prefix ='data/'
+    bucket = client.get_bucket(bucket_name)
+    blobs = bucket.list_blobs(prefix=prefix)
+
+    #Création du dossier local s'il n'existe pas
+    script_directory = os.path.dirname(__file__)
+    local_destination_folder = os.path.join(script_directory, "data")
+    os.makedirs(local_destination_folder, exist_ok=True)
+
+    for blob in blobs :
+        blob_name=blob.name[len(prefix):]
+        local_destination = os.path(local_destination_folder, blob_name)
+
+        if not os.path.exists(local_destination):
+            blob.download_to_filename(local_destination)
+
 
 def step_decay(epoch):
     initial_lr = 0.001
@@ -81,7 +103,10 @@ def step_decay(epoch):
 
 
 def train():
-    download_images_from_gcs()
+    if __name__ == "__main__":
+        # Utilisation de la fonction pour télécharger les données dans le répertoire du script
+        download_images_from_gcs()
+
     train_data = pd.read_csv('../data/train.csv')
     plot_data_train(train_data)
     metadata = get_metadata()
