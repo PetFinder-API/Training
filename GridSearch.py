@@ -68,7 +68,7 @@ class KerasRegressorWrapper(BaseEstimator, RegressorMixin):
         return self.model.predict(images)
 
 # Charger les données et prétraiter
-metadata = pd.read_csv("../data/train.csv")
+metadata = pd.read_csv("data/train.csv")
 popularity_score = metadata["Pawpularity"].values
 images_ids = metadata["Id"].tolist()
 image_paths = [f"../data/train/{id}.jpg" for id in images_ids]
