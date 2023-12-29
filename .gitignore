@@ -5,3 +5,4 @@ train_picture_upgrade
 data
 .DS_Store
 /kaggle.json
+logs

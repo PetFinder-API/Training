@@ -22,8 +22,6 @@ def preprocess_image(img_path):
 
 
 def build_model():
-    # To improve the model performance, you could look into transfer learning
-    # to use existing model and only train the n-last layers
 
     model = Sequential()
 
@@ -61,16 +59,63 @@ def build_model():
 
 
 def get_metadata():
-    metadata = pd.read_csv("data/train.csv")
+    metadata = pd.read_csv("data/csv/train.csv")
     return metadata[["Id", "Pawpularity"]]
 
 
 def get_images(images_ids, images_path):
-    return np.array([preprocess_image(os.path.join(images_path, id + ".jpg")) for id in images_ids])
+    images = []
+    for id in images_ids:
+        image_path = os.path.join(images_path, f"{id}.jpg")
+        print(f"Checking existence of {image_path}")
+        try:
+            img_array = preprocess_image(image_path)
+            images.append(img_array)
+            print(f"Image {id} loaded successfully")
+        except FileNotFoundError:
+            print(f"Error: Image {id} not found.")
+    return np.array(images)
 
 
-def download_data_from_gcs():
-    # Téléchargez si le dossier de données n'existe pas
+def download_csv_from_gcs():
+    # Téléchargez les fichiers CSV si le dossier de données n'existe pas
+    bucket_name = "pet-finder"
+    project_id = "pet-finder-407918"
+
+    # Initialiser le client de stockage
+    client = storage.Client(project=project_id)
+
+    # Liste des fichiers CSV à télécharger
+    csv_files_to_download = [
+        'data/sample_submission.csv',
+        'data/test.csv',
+        'data/train.csv',
+    ]
+
+    # Créez le dossier local CSV s'il n'existe pas
+    script_directory = os.getcwd()
+    local_csv_folder = os.path.join(script_directory, 'data', 'csv')
+
+    if not os.path.exists(local_csv_folder):
+        os.makedirs(local_csv_folder)
+
+    for csv_file_path in csv_files_to_download:
+        blob = client.bucket(bucket_name).blob(csv_file_path)
+
+        local_csv_destination = os.path.join(local_csv_folder, os.path.basename(csv_file_path))
+
+        print(f"Checking existence of {local_csv_destination}")
+
+        if not os.path.exists(local_csv_destination):
+            blob.download_to_filename(local_csv_destination)
+            print(f"CSV file {csv_file_path} downloaded to {local_csv_destination}")
+        else:
+            print(f"CSV file {csv_file_path} already exists in the local destination")
+
+    print("CSV files downloaded successfully.")
+
+def download_images_from_gcs():
+    # Téléchargez les dossiers "train" et "test" si le dossier de données n'existe pas
     bucket_name = "pet-finder"
     project_id = "pet-finder-407918"
 
@@ -78,7 +123,7 @@ def download_data_from_gcs():
     client = storage.Client(project=project_id)
 
     # Liste des préfixes des fichiers à télécharger
-    prefixes = ['data/sample_submission.csv', 'data/test.csv', 'data/train.csv', 'data/train/', 'data/test/']
+    prefixes = ['data/train/', 'data/test/']
 
     download_needed = False  # Variable pour vérifier si le téléchargement est nécessaire
 
@@ -86,18 +131,10 @@ def download_data_from_gcs():
         bucket = client.bucket(bucket_name)
         blobs = bucket.list_blobs(prefix=prefix)
 
-        # Créez le dossier local s'il n'existe pas
-        script_directory = os.getcwd()  # Utilisez getcwd() pour obtenir le répertoire actuel
+        script_directory = os.getcwd()
 
-        # Si le préfixe se termine par '/', téléchargez les images dans le dossier 'train' ou 'test'
-        if prefix.endswith('/'):
-            local_destination_folder = os.path.join(script_directory, prefix[:-1])  # Retirez le '/' à la fin du préfixe
-        else:
-            local_destination_folder = os.path.join(script_directory, 'data')
-
-        # Si le préfixe se termine par '.csv', téléchargez directement dans le dossier 'data'
-        if prefix.endswith('.csv'):
-            local_destination_folder = os.path.join(script_directory, 'data')
+        # Créez le dossier local de destination pour les images
+        local_destination_folder = os.path.join(script_directory, prefix[:-1])
 
         if not os.path.exists(local_destination_folder):
             os.makedirs(local_destination_folder)
@@ -119,6 +156,9 @@ def download_data_from_gcs():
         else:
             print("Data already exists locally. No need to download.")
 
+    print("Images downloaded successfully.")
+
+
 def step_decay(epoch):
     initial_lr = 0.001
     drop = 0.5
@@ -130,18 +170,20 @@ def step_decay(epoch):
 def train():
     if __name__ == "__main__":
         # Utilisation de la fonction pour télécharger les données dans le répertoire du script
-        download_data_from_gcs()
+        download_csv_from_gcs()
+        # Utilisation de la fonction pour télécharger les images
+        download_images_from_gcs()
 
     # Vérifier si le fichier 'data/train.csv' existe avant de le lire
-    train_csv_path = 'data/train.csv'
+    train_csv_path = 'data/csv/train.csv'
     if os.path.exists(train_csv_path):
         train_data = pd.read_csv(train_csv_path)
-        #plot_data_train(train_data)
+        plot_data_train(train_data)
         metadata = get_metadata()
         popularity_score = metadata["Pawpularity"].values
         print("Popularity scores acquired")
         images_ids = metadata["Id"].tolist()
-        images = get_images(images_ids, 'data/train')  # Modifier cette ligne
+        images = get_images(images_ids, 'data/train') #modifier si on veut utiliser test
         print("Images loaded")
 
         # Diviser les données en ensembles d'entraînement et de test
@@ -168,7 +210,7 @@ def train():
                             callbacks=[early_stopping, lr_scheduler], workers=4)
 
         # Plot de l'historique d'entraînement
-        #plot_training_history(history)
+        plot_training_history(history)
 
         # Évaluer le modèle
         test_loss = model.evaluate(X_test, y_test)
