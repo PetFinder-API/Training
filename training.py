@@ -3,13 +3,15 @@ import pandas as  pd
 from PIL import Image
 from keras.callbacks import EarlyStopping, LearningRateScheduler
 from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, BatchNormalization, Dropout
-from keras.models import Sequential
+from keras.models import Sequential, Model
 from sklearn.model_selection import train_test_split
 from plot_functions import plot_data_train, plot_training_history
 from keras.preprocessing.image import ImageDataGenerator
 from keras.optimizers import RMSprop
 from google.cloud import storage
 import os
+from keras.applications import VGG16
+from sklearn.metrics import r2_score
 
 
 # Transformation des images pour les adapter au modèle
@@ -21,42 +23,40 @@ def preprocess_image(img_path):
     return img_array
 
 
-def build_model():
 
-    model = Sequential()
+def build_transfer_learning_model(input_shape=(56, 56, 3)):
+    base_model = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
 
-    model.add(Conv2D(32, (3, 3),input_shape=(56, 56, 3), activation='leaky_relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPooling2D(pool_size=(3, 3)))
+    # Freeze the layers of the pre-trained model
+    for layer in base_model.layers:
+        layer.trainable = False
 
+    x = base_model.output
+    x = Flatten()(x)
+    x = Dense(512, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.3)(x)
 
-    model.add(Conv2D(64, (3, 3), activation='relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPooling2D(pool_size=(3, 3)))
+    x = Dense(256, activation='relu')(x)
+    x = BatchNormalization()(x)
 
+    x = Dense(128, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.3)(x)
 
-    model.add(Conv2D(128, (3, 3), activation='leaky_relu'))
-    model.add(BatchNormalization())
-    model.add(MaxPooling2D(pool_size=(3, 3)))
-    model.add(Dropout(0.2))
+    x = Dense(64, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.3)(x)
 
-    model.add(Flatten())
-    model.add(Dense(256, activation='relu'))
-    model.add(BatchNormalization())
+    x = Dense(32, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.3)(x)
 
-    model.add(Dense(128, activation='leaky_relu'))
-    model.add(BatchNormalization())
+    predictions = Dense(1, activation='linear')(x)
 
-    model.add(Dense(64, activation='relu'))
-    model.add(BatchNormalization())
-
-    model.add(Dense(32, activation='leaky_relu'))
-    model.add(BatchNormalization())
-
-    model.add(Dense(1, activation='linear'))
+    model = Model(inputs=base_model.input, outputs=predictions)
 
     return model
-
 
 def get_metadata():
     metadata = pd.read_csv("data/csv/train.csv")
@@ -189,35 +189,39 @@ def train():
         # Diviser les données en ensembles d'entraînement et de test
         X_train, X_test, y_train, y_test = train_test_split(images, popularity_score, test_size=0.2, random_state=42)
 
-        # Définir le modèle
-        model = build_model()
-
+        transfer_model = build_transfer_learning_model()
+        transfer_model.compile(optimizer=RMSprop(lr=0.0001), loss='mean_squared_error',
+                               metrics=['mae', 'mse', 'RootMeanSquaredError'])
         #model.compile(optimizer=Adam(lr=0.0003), loss='mean_squared_error', metrics=['mae', 'mse', 'RootMeanSquaredError'])
-        model.compile(optimizer=RMSprop(lr=0.0001), loss='mean_squared_error', metrics=['mae', 'mse', 'RootMeanSquaredError'])
+
 
         lr_scheduler = LearningRateScheduler(step_decay)
         early_stopping = EarlyStopping(monitor='val_root_mean_squared_error', patience=10, restore_best_weights=True)
 
         num_epochs = 10
-        batch_size = 32
+        batch_size = 16
 
         datagen = ImageDataGenerator(rotation_range=20, width_shift_range=0.2, height_shift_range=0.2,
                                      shear_range=0.2, zoom_range=0.2, horizontal_flip=True)
         datagen.fit(X_train)
 
-        history = model.fit(datagen.flow(X_train, y_train, batch_size=batch_size, shuffle=True),
+        history = transfer_model.fit(datagen.flow(X_train, y_train, batch_size=batch_size, shuffle=True),
                             epochs=num_epochs, validation_data=(X_test, y_test),
-                            callbacks=[early_stopping, lr_scheduler], workers=4)
+                            callbacks=[early_stopping, lr_scheduler], workers=8)
 
         # Plot de l'historique d'entraînement
         plot_training_history(history)
 
         # Évaluer le modèle
-        test_loss = model.evaluate(X_test, y_test)
+        test_loss = transfer_model.evaluate(X_test, y_test)
+        y_pred = transfer_model.predict(X_test)
+        r2 = r2_score(y_test, y_pred)
+
         print(f"Test loss: {test_loss}")
+        print(f"R2 score for transfer learning model: {r2}")
 
         # Sauvegarder le modèle
-        model.save("animal_adoption_model.h5")
+        transfer_model.save("animal_adoption_model.h5")
         print("The model has been saved")
     else:
         print(f"Error: File '{train_csv_path}' not found.")
