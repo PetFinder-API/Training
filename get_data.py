@@ -85,5 +85,5 @@ def download_single_image(blob, local_destination_folder, prefix):
     else:
         print(f"File {blob_name} already exists in the local destination")
 
-
+download_csv_from_gcs()
 download_images_from_gcs()
