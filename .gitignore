@@ -7,3 +7,5 @@ data
 /kaggle.json
 logs
 animal_adoption_model.h5
+*.json
+*.pyc
